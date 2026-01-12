@@ -21,7 +21,7 @@ env:
   ECR_REPO_NAME: "bion-talent-311141549490-vote-app"  
   PLATFORM_APPS_REPO: "aybukekraca/platform-apps"
   PLATFORM_APPS_REF: "main"
-  PLATFORM_APPS_PATH: "platform-apps"
+  PLATFORM_APPS_PATH: "vote-app"
   VALUES_FILE: "vote-app/values.yaml"
 
 jobs:

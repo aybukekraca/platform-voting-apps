@@ -21,7 +21,7 @@ env:
   ECR_REPO_NAME: "bion-talent-311141549490-worker-app"  
   PLATFORM_APPS_REPO: "aybukekraca/platform-apps"
   PLATFORM_APPS_REF: "main"
-  PLATFORM_APPS_PATH: "platform-apps"
+  PLATFORM_APPS_PATH: "worker-app"
   VALUES_FILE: "worker-app/values.yaml"
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
           role-to-assume: arn:aws:iam::130575395405:role/talent_role
           role-session-name: aybuke-bion
           role-skip-session-tagging: true
-          
+
       - name: Meta
         id: meta
         run: |

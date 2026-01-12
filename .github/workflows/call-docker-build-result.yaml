@@ -22,7 +22,7 @@ env:
   ECR_REPO_NAME: "bion-talent-311141549490-result-app"  
   PLATFORM_APPS_REPO: "aybukekraca/platform-apps"
   PLATFORM_APPS_REF: "main"
-  PLATFORM_APPS_PATH: "platform-apps"
+  PLATFORM_APPS_PATH: "result-app"
   VALUES_FILE: "result-app/values.yaml"
 
 jobs:
