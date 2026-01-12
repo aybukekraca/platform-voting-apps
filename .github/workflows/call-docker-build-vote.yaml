@@ -40,6 +40,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: arn:aws:iam::130575395405:role/talent_role
+          role-session-name: aybuke-bion
+          role-skip-session-tagging: true
 
       - name: Meta
         id: meta
