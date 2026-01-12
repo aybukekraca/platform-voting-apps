@@ -1,12 +1,11 @@
-name: CI - Result (ECR push + Update platform-apps tag only)
+name: CI - result (ECR push + Update platform-apps tag)
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main123"]
     paths:
       - "result/**"
       - ".github/workflows/call-docker-build-result.yaml"
-      
   pull_request:
     branches: ["main"]
     paths:
@@ -19,19 +18,30 @@ permissions:
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_ACCOUNT_ID: ${{ secrets.ECR_ACCOUNT_ID }}
-  ECR_REPO_NAME: "bion-talent-311141549490-result-app"  
-  PLATFORM_APPS_REPO: "aybukekraca/platform-apps"
-  PLATFORM_APPS_REF: "main"
-  PLATFORM_APPS_PATH: "result-app"
-  VALUES_FILE: "result-app/values.yaml"
+  ECR_REPO_NAME: bion-talent-311141549490-result-app
+
+  PLATFORM_APPS_REPO: aybukekraca/platform-apps
+  PLATFORM_APPS_REF: main
+  PLATFORM_APPS_PATH: platform-apps
+  VALUES_FILE: helm/values/result-app/values.yaml
 
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
+      image_uri: ${{ steps.meta.outputs.image_uri }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Meta (tag)
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TAG="sha-${SHORT_SHA}-${GITHUB_RUN_NUMBER}"
+          IMAGE_URI="${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${TAG}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (push only)
         if: github.event_name == 'push'
@@ -44,14 +54,6 @@ jobs:
           role-session-name: aybuke-bion
           role-skip-session-tagging: true
 
-      - name: Meta
-        id: meta
-        run: |
-          echo "tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Login to Amazon ECR (push only)
         if: github.event_name == 'push'
         uses: aws-actions/amazon-ecr-login@v2
@@ -59,19 +61,22 @@ jobs:
       - name: Verify ECR repository exists (push only)
         if: github.event_name == 'push'
         run: |
-          aws ecr describe-repositories --registry-id "${ECR_ACCOUNT_ID}" --repository-names "${ECR_REPO_NAME}" >/dev/null
+          aws ecr describe-repositories \
+            --registry-id "${ECR_ACCOUNT_ID}" \
+            --repository-names "${ECR_REPO_NAME}" >/dev/null
 
-      - name: Build (PR) / Build+Push (main)
-        env:
-          TAG: ${{ steps.meta.outputs.tag }}
+      - name: Build (PR)
+        if: github.event_name == 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            docker build -t "result-app:${TAG}" -f result/Dockerfile result
-            exit 0
-          fi
+          docker build -t "result-app:test" -f result/Dockerfile result
 
-          IMAGE_URI="${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${TAG}"
-          docker buildx build --platform linux/amd64 -t "${IMAGE_URI}" -f result/Dockerfile result --push
+      - name: Build + Push (main) - clean
+        if: github.event_name == 'push'
+        env:
+          IMAGE_URI: ${{ steps.meta.outputs.image_uri }}
+        run: |
+          docker build -t "${IMAGE_URI}" -f result/Dockerfile result
+          docker push "${IMAGE_URI}"
 
   update_platform_apps:
     if: github.event_name == 'push'
@@ -94,12 +99,12 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Update tag only (result)
+      - name: Update image tag in values.yaml
         env:
           TAG: ${{ needs.build_and_push.outputs.tag }}
         run: |
           cd "${PLATFORM_APPS_PATH}"
-          yq -i ".result.image.tag = \"${TAG}\"" "${VALUES_FILE}"
+          yq -i '.image.tag = strenv(TAG)' "${VALUES_FILE}"
           git diff
 
       - name: Commit & push
@@ -110,5 +115,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add "${VALUES_FILE}"
-          git commit -m "chore(result): bump tag to ${TAG}" || exit 0
+          git commit -m "chore(result): bump image tag to ${TAG}" || exit 0
           git push

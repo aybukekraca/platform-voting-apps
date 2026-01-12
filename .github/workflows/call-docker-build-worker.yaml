@@ -1,4 +1,4 @@
-name: CI - Worker (ECR push + Update platform-apps tag only)
+name: CI - Worker (ECR push + Update platform-apps tag)
 
 on:
   push:
@@ -17,20 +17,31 @@ permissions:
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_ACCOUNT_ID: ${{ secrets.ECR_ACCOUNT_ID }}
-  ECR_REPO_NAME: "bion-talent-311141549490-worker-app"  
-  PLATFORM_APPS_REPO: "aybukekraca/platform-apps"
-  PLATFORM_APPS_REF: "main"
-  PLATFORM_APPS_PATH: "worker-app"
-  VALUES_FILE: "worker-app/values.yaml"
+  ECR_ACCOUNT_ID: "311141549490"
+  ECR_REPO_NAME: bion-talent-311141549490-worker-app
+
+  PLATFORM_APPS_REPO: aybukekraca/platform-apps
+  PLATFORM_APPS_REF: main
+  PLATFORM_APPS_PATH: platform-apps
+  VALUES_FILE: helm/values/worker-app/values.yaml
 
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
+      image_uri: ${{ steps.meta.outputs.image_uri }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Meta (tag)
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TAG="sha-${SHORT_SHA}-${GITHUB_RUN_NUMBER}"
+          IMAGE_URI="${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${TAG}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (push only)
         if: github.event_name == 'push'
@@ -39,17 +50,10 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws:iam::130575395405:role/talent_role
-          role-session-name: aybuke-bion
-          role-skip-session-tagging: true
-
-      - name: Meta
-        id: meta
-        run: |
-          echo "tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      
+       #   role-to-assume: arn:aws:iam::130575395405:role/talent_role
+       #   role-session-name: aybuke-bion
+       #   role-skip-session-tagging: true
 
       - name: Login to Amazon ECR (push only)
         if: github.event_name == 'push'
@@ -58,19 +62,22 @@ jobs:
       - name: Verify ECR repository exists (push only)
         if: github.event_name == 'push'
         run: |
-          aws ecr describe-repositories --registry-id "${ECR_ACCOUNT_ID}" --repository-names "${ECR_REPO_NAME}" >/dev/null
+          aws ecr describe-repositories \
+            --registry-id "${ECR_ACCOUNT_ID}" \
+            --repository-names "${ECR_REPO_NAME}" >/dev/null
 
-      - name: Build (PR) / Build+Push (main)
-        env:
-          TAG: ${{ steps.meta.outputs.tag }}
+      - name: Build (PR)
+        if: github.event_name == 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            docker build -t "worker-app:${TAG}" -f worker/Dockerfile worker
-            exit 0
-          fi
+          docker build -t "worker-app:test" -f worker/Dockerfile worker
 
-          IMAGE_URI="${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${TAG}"
-          docker buildx build --platform linux/amd64 -t "${IMAGE_URI}" -f worker/Dockerfile worker --push
+      - name: Build + Push (main) - clean
+        if: github.event_name == 'push'
+        env:
+          IMAGE_URI: ${{ steps.meta.outputs.image_uri }}
+        run: |
+          docker build -t "${IMAGE_URI}" -f worker/Dockerfile worker
+          docker push "${IMAGE_URI}"
 
   update_platform_apps:
     if: github.event_name == 'push'
@@ -93,12 +100,12 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Update tag only (worker)
+      - name: Update image tag in values.yaml
         env:
           TAG: ${{ needs.build_and_push.outputs.tag }}
         run: |
           cd "${PLATFORM_APPS_PATH}"
-          yq -i ".worker.image.tag = \"${TAG}\"" "${VALUES_FILE}"
+          yq -i '.image.tag = strenv(TAG)' "${VALUES_FILE}"
           git diff
 
       - name: Commit & push
@@ -109,5 +116,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add "${VALUES_FILE}"
-          git commit -m "chore(worker): bump tag to ${TAG}" || exit 0
+          git commit -m "chore(worker): bump image tag to ${TAG}" || exit 0
           git push
