@@ -17,7 +17,8 @@ permissions:
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_ACCOUNT_ID: ${{ secrets.ECR_ACCOUNT_ID }}
+#  ECR_ACCOUNT_ID: ${{ secrets.ECR_ACCOUNT_ID }}
+  ECR_ACCOUNT_ID: "311141549490"
   ECR_REPO_NAME: bion-talent-311141549490-worker-app
 
   PLATFORM_APPS_REPO: aybukekraca/platform-apps
@@ -50,9 +51,10 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws:iam::130575395405:role/talent_role
-          role-session-name: aybuke-bion
-          role-skip-session-tagging: true
+
+        #  role-to-assume: arn:aws:iam::130575395405:role/talent_role
+        #  role-session-name: aybuke-bion
+        #  role-skip-session-tagging: true
 
       - name: Login to Amazon ECR (push only)
         if: github.event_name == 'push'
@@ -114,7 +116,7 @@ jobs:
           cd "${PLATFORM_APPS_PATH}"
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+          git pull --rebase origin "${PLATFORM_APPS_REF}"
           git add "${VALUES_FILE}"
           git commit -m "chore(worker): bump image tag to ${TAG}" || exit 0
-          git pull --rebase origin "${PLATFORM_APPS_REF}"
           git push
