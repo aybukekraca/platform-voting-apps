@@ -2,7 +2,7 @@ name: CI - vote (ECR push + Update platform-apps tag)
 
 on:
   push:
-    branches: ["main123"]
+    branches: ["main"]
     paths:
       - "vote/**"
       - ".github/workflows/call-docker-build-vote.yaml"

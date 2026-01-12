@@ -2,7 +2,7 @@ name: CI - result (ECR push + Update platform-apps tag)
 
 on:
   push:
-    branches: ["main123"]
+    branches: ["main"]
     paths:
       - "result/**"
       - ".github/workflows/call-docker-build-result.yaml"
