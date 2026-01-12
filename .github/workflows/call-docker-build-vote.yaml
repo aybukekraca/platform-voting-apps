@@ -16,20 +16,19 @@ permissions:
   contents: read
 
 env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_ACCOUNT_ID: ${{ secrets.ECR_ACCOUNT_ID }}
+  ECR_REPO_NAME: "bion-talent-311141549490-vote-app"  
   PLATFORM_APPS_REPO: "aybukekraca/platform-apps"
   PLATFORM_APPS_REF: "main"
   PLATFORM_APPS_PATH: "platform-apps"
   VALUES_FILE: "vote-app/values.yaml"
-  SERVICE: "vote"
 
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
-      region: ${{ steps.meta.outputs.region }}
-      account_id: ${{ steps.meta.outputs.account_id }}
-      repo_name: ${{ steps.meta.outputs.repo_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,21 +38,12 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Meta
         id: meta
         run: |
           echo "tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "region=${{ secrets.AWS_REGION }}" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "push" ]; then
-            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-            echo "account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
-            echo "repo_name=bion-talent-${ACCOUNT_ID}-${SERVICE}" >> "$GITHUB_OUTPUT"
-          else
-            echo "account_id=UNKNOWN" >> "$GITHUB_OUTPUT"
-            echo "repo_name=bion-talent-PR-dummy-${SERVICE}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -65,27 +55,26 @@ jobs:
       - name: Verify ECR repository exists (push only)
         if: github.event_name == 'push'
         run: |
-          aws ecr describe-repositories --repository-names "${{ steps.meta.outputs.repo_name }}" >/dev/null
+          aws ecr describe-repositories --registry-id "${ECR_ACCOUNT_ID}" --repository-names "${ECR_REPO_NAME}" >/dev/null
 
       - name: Build (PR) / Build+Push (main)
         env:
           TAG: ${{ steps.meta.outputs.tag }}
-          REGION: ${{ steps.meta.outputs.region }}
-          ACCOUNT_ID: ${{ steps.meta.outputs.account_id }}
-          REPO_NAME: ${{ steps.meta.outputs.repo_name }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            docker build -t "${SERVICE}:${TAG}" -f vote/Dockerfile vote
+            docker build -t "vote-app:${TAG}" -f vote/Dockerfile vote
             exit 0
           fi
 
-          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:${TAG}"
+          IMAGE_URI="${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${TAG}"
           docker buildx build --platform linux/amd64 -t "${IMAGE_URI}" -f vote/Dockerfile vote --push
 
   update_platform_apps:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     needs: [build_and_push]
+    permissions:
+      contents: write
     steps:
       - name: Checkout platform-apps
         uses: actions/checkout@v4
@@ -101,7 +90,7 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Update tag only
+      - name: Update tag only (vote)
         env:
           TAG: ${{ needs.build_and_push.outputs.tag }}
         run: |
