@@ -17,7 +17,8 @@ permissions:
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_ACCOUNT_ID: ${{ secrets.ECR_ACCOUNT_ID }}
+#  ECR_ACCOUNT_ID: ${{ secrets.ECR_ACCOUNT_ID }}
+  ECR_ACCOUNT_ID: "311141549490"
   ECR_REPO_NAME: bion-talent-311141549490-result-app
 
   PLATFORM_APPS_REPO: aybukekraca/platform-apps
