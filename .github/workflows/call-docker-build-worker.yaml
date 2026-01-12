@@ -105,7 +105,7 @@ jobs:
           TAG: ${{ needs.build_and_push.outputs.tag }}
         run: |
           cd "${PLATFORM_APPS_PATH}"
-          yq -i '.image.tag = strenv(TAG)' "${VALUES_FILE}"
+          yq -i '.deployment.image.tag = strenv(TAG)' "${VALUES_FILE}"
           git diff
 
       - name: Commit & push
