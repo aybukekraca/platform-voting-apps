@@ -63,3 +63,10 @@ The voting application only accepts one vote per client browser. It does not reg
 This isn't an example of a properly architected perfectly designed distributed app... it's just a simple
 example of the various types of pieces and languages you might see (queues, persistent data, etc), and how to
 deal with them in Docker at a basic level.
+
+## Assessment CI
+
+This fork is used as the assessment’s CI repository.
+GitHub Actions workflows build container images, publish them to AWS ECR (eu-west-2) using immutable `sha-*` tags, and trigger deployment via Argo CD from a separate GitOps configuration repository.
+
+Infrastructure provisioning (Terraform) and deployment configuration (GitOps) are maintained in separate repositories as part of the assessment deliverables.
